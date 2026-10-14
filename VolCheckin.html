@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>Volunteer Check-In</title>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; margin: 0; padding: 0; font-family: Helvetica, Arial, sans-serif; background: #f2f4f7; color: #1a1a1a; }
+    body { -webkit-user-select: none; user-select: none; }
+    input, select { -webkit-user-select: text; user-select: text; }
+    button { -webkit-appearance: none; }
+    .screen { min-height: 100%; display: flex; flex-direction: column; }
+    
+    /* =========================================================
+       SETUP SCREEN
+       ========================================================= */
+    #setupScreen { display: flex; align-items: center; justify-content: center; min-height: 100%; padding: 20px; }
+    .setupCard { background: #fff; border: 1px solid #ddd; border-radius: 10px; padding: 26px; max-width: 460px; width: 100%; text-align: center; }
+    .setupCard h1 { font-size: 20px; margin: 0 0 6px 0; }
+    .setupCard p { color: #666; font-size: 14px; margin: 0 0 18px 0; }
+    input[type=file] { font-size: 14px; max-width: 100%; margin-top: 8px; }
+    .status { font-size: 13px; margin-top: 12px; }
+    .status.ok { color: #2f855a; }
+    .status.err { color: #c53030; }
+    .divider { margin: 24px 0; border-top: 1px solid #e2e2e2; position: relative; }
+    .divider span { background: #fff; padding: 0 10px; color: #888; font-size: 12px; position: absolute; top: -8px; left: 50%; transform: translateX(-50%); }
+
+    /* =========================================================
+       MAIN SCREEN
+       ========================================================= */
+    #mainScreen { display: none; flex-direction: column; min-height: 100%; }
+    .topbar { background: #2b6cb0; color: #fff; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; }
+    .topbar .datetxt { font-size: 15px; font-weight: bold; }
+    .topbar .stat { font-size: 12px; opacity: 0.9; }
+    .topbar-actions { display: flex; align-items: center; gap: 12px; }
+    .sync-indicator { font-size: 12px; font-weight: bold; padding: 4px 8px; border-radius: 12px; background: rgba(0,0,0,0.2); transition: opacity 0.3s, background 0.3s; opacity: 0; }
+    .sync-indicator.syncing { opacity: 1; background: #d69e2e; color: #fff; }
+    .sync-indicator.success { opacity: 1; background: #38a169; color: #fff; }
+    .sync-indicator.error { opacity: 1; background: #c53030; color: #fff; }
+    .gearBtn { background: rgba(255,255,255,0.18); border: none; color: #fff; font-size: 18px; width: 38px; height: 38px; border-radius: 8px; cursor: pointer; }
+    .searchWrap { padding: 14px; background: #fff; border-bottom: 1px solid #e2e2e2; }
+    #searchInput { width: 100%; font-size: 20px; padding: 14px; border: 2px solid #cbd5e0; border-radius: 8px; -webkit-appearance: none; }
+    #searchInput:focus { border-color: #2b6cb0; outline: none; }
+    .listWrap { flex: 1; overflow-y: auto; padding: 10px 14px 90px 14px; -webkit-overflow-scrolling: touch; }
+    .personCard { background: #fff; border: 1px solid #e2e2e2; border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; }
+    .personCard.checkedIn { background: #eafaf0; border-color: #38a169; }
+    .personInfo { flex: 1; min-width: 0; }
+    .personName { font-size: 18px; font-weight: bold; }
+    .personMeta { font-size: 13px; color: #666; margin-top: 3px; }
+    .checkBadge { font-size: 13px; font-weight: bold; padding: 8px 14px; border-radius: 20px; background: #edf2f7; color: #4a5568; white-space: nowrap; margin-left: 10px; }
+    .personCard.checkedIn .checkBadge { background: #38a169; color: #fff; }
+    .emptyState { text-align: center; color: #888; padding: 30px 10px; font-size: 14px; }
+    .emptyState .bigname { font-size: 17px; color: #333; margin-bottom: 10px; }
+    
+    /* =========================================================
+       FORMS
+       ========================================================= */
+    .quickAdd, .editCard { background: #fff; border: 1px solid #cbd5e0; border-radius: 10px; padding: 16px; margin-top: 10px; text-align: left; }
+    .quickAdd { border-style: dashed; }
+    .quickAdd h3, .editCard h3 { font-size: 15px; margin: 0 0 12px 0; }
+    .fieldLabel { display: block; font-size: 12px; font-weight: bold; color: #555; margin: 10px 0 4px 0; }
+    .fieldrow { display: flex; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
+    .fieldrow > * { flex: 1 1 140px; }
+    .formInput, .formSelect { width: 100%; font-size: 16px; padding: 10px; border: 1px solid #ccc; border-radius: 6px; background: #fff; }
+    .formInput:focus, .formSelect:focus { outline: none; border-color: #2b6cb0; }
+    .formButtons { display: flex; gap: 8px; margin-top: 14px; }
+    .formButtons .btn { flex: 1; }
+    
+    /* Buttons */
+    .btn { display: inline-block; background: #2b6cb0; color: #fff; border: none; padding: 11px 18px; border-radius: 6px; font-size: 15px; cursor: pointer; min-height: 44px; font-weight: bold;}
+    .btn.secondary { background: #718096; }
+    .btn.success { background: #38a169; }
+    .btn.danger { background: #c53030; }
+    .btn.block { width: 100%; }
+
+    /* =========================================================
+       RECENT BAR
+       ========================================================= */
+    .recentBar { background: #fff; border-top: 1px solid #e2e2e2; padding: 8px 14px; }
+    .recentBar .label { font-size: 11px; color: #888; margin-bottom: 4px; }
+    .recentChip { display: inline-block; background: #eafaf0; border: 1px solid #38a169; color: #276749; font-size: 12px; padding: 5px 10px; border-radius: 14px; margin: 2px 4px 2px 0; }
+
+    /* =========================================================
+       ADMIN DRAWER
+       ========================================================= */
+    #adminOverlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 50; }
+    #adminPanel { position: absolute; right: 0; top: 0; bottom: 0; width: 320px; max-width: 90%; background: #fff; padding: 18px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+    #adminPanel h2 { font-size: 16px; margin: 0 0 14px 0; }
+    #adminPanel label { font-size: 12px; font-weight: bold; display: block; margin: 12px 0 4px 0; }
+    #adminPanel .closeBtn { float: right; background: none; border: none; font-size: 20px; cursor: pointer; color: #666; }
+    #adminPanel input[type=date], #adminPanel input[type=file] { width: 100%; font-size: 14px; padding: 6px; }
+    .adminStat { font-size: 13px; color: #444; margin: 4px 0; }
+    hr { border: none; border-top: 1px solid #eee; margin: 16px 0; }
+  </style>
+</head>
+<body>
+
+  <!-- =========================================================
+       SETUP SCREEN
+       ========================================================= -->
+  <div id="setupScreen" class="screen">
+    <div class="setupCard">
+      <h1>Volunteer Check-In</h1>
+      
+      <p style="margin-bottom:20px;">For kiosk devices, load the active roster.</p>
+      <button class="btn block" id="loadServerBtn" type="button">Load Roster from GitHub</button>
+      <button class="btn block secondary" id="tokenBtn" type="button" style="margin-top:8px;">Set GitHub Token</button>
+
+      <div class="divider"><span>OR</span></div>
+      
+      <p>For admin updates, upload <b>HELP CCF CAMPAIGN - Distribution Volunteers.csv</b> to set the new master list.</p>
+      <input type="file" id="fileInput" accept=".csv,text/csv">
+      
+      <div id="importStatus" class="status"></div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MAIN CHECK-IN SCREEN
+       ========================================================= -->
+  <div id="mainScreen">
+    <div class="topbar">
+      <div>
+        <div class="datetxt" id="dateDisplay">--</div>
+        <div class="stat" id="statDisplay">0 checked in</div>
+      </div>
+      <div class="topbar-actions">
+        <div id="syncIndicator" class="sync-indicator">Cloud Sync</div>
+        <button class="gearBtn" id="gearBtn" type="button" title="Admin">&#9881;</button>
+      </div>
+    </div>
+    
+    <div class="searchWrap">
+      <input type="text" id="searchInput" placeholder="Type a name to check in..." autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false">
+    </div>
+    
+    <div class="listWrap" id="listWrap"></div>
+    
+    <div class="recentBar" id="recentBar" style="display:none;">
+      <div class="label">Just checked in</div>
+      <div id="recentChips"></div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       ADMIN DRAWER
+       ========================================================= -->
+  <div id="adminOverlay">
+    <div id="adminPanel">
+      <button class="closeBtn" id="closeAdminBtn" type="button">&times;</button>
+      <h2>Admin Panel</h2>
+      <div class="adminStat" id="adminStats">--</div>
+
+      <label for="dateOverride">Check-in date</label>
+      <input type="date" id="dateOverride">
+
+      <hr>
+      <label>Manual Force Sync</label>
+      <button class="btn block secondary" id="forceSyncBtn" type="button" style="margin-bottom:8px;">Force Sync to GitHub</button>
+      
+      <hr>
+      <label>Download for Google Sheets</label>
+      <button class="btn block" id="exportBtn" type="button">Download local CSV</button>
+      <div id="exportStatus" class="status"></div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      /* =========================================================
+         CONFIGURATION
+         ========================================================= */
+      // GitHub repo that holds the roster CSV (use a PRIVATE repo - it contains phone/email)
+      var GH_OWNER  = 'YOUR-GITHUB-USERNAME';
+      var GH_REPO   = 'YOUR-PRIVATE-DATA-REPO';
+      var GH_PATH   = 'roster.csv';
+      var GH_BRANCH = 'main';
+
+      var AGE_OPTIONS = [
+        { value: '', label: '-- Age range --' },
+        { value: 'Child\tCH\tUnder 5', label: 'Child (CH) Under 5' },
+        { value: 'Elementary School\tES\t5-11', label: 'Elementary School (ES) 5-11' },
+        { value: 'Middle School\tMS\t11-14', label: 'Middle School (MS) 11-14' },
+        { value: 'High School\tHS\t14-18', label: 'High School (HS) 14-18' },
+        { value: 'College\tC\t18+', label: 'College (C) 18+' },
+        { value: 'Adult\tA\t18+', label: 'Adult (A) 18+' }
+      ];
+
+      var FIXED_COLS = ['First Name', 'Last Name', 'Full Name', 'Group', 'Phone Number', 'Email', 'Age Range', 'Total #'];
+
+      /* =========================================================
+         STATE
+         ========================================================= */
+      var headers = [];
+      var rows = [];
+      var idxFirst = -1, idxLast = -1, idxFull = -1, idxAge = -1, idxGroup = -1, idxPhone = -1, idxEmail = -1, idxTotal = -1;
+      var currentDateColIdx = -1;
+      var recentCheckins = [];
+
+      /* =========================================================
+         NETWORK SYNC (GITHUB CONTENTS API)
+         ========================================================= */
+      var TOKEN_KEY = 'vc_gh_token';
+      var fileSha = null, saving = false, pendingSave = false, pendingOverwrite = false;
+
+      function setSyncIndicator(state) {
+        var el = document.getElementById('syncIndicator');
+        el.className = 'sync-indicator ' + state;
+        if (state === 'syncing') el.textContent = 'Syncing...';
+        else if (state === 'success') el.textContent = '\u2713 Saved';
+        else if (state === 'error') el.textContent = '\u26A0 Error';
+        if (state === 'success') {
+          setTimeout(function() { el.className = 'sync-indicator'; }, 2500);
+        }
+      }
+
+      function toB64(str) {
+        var bytes = new TextEncoder().encode(str), bin = '', i;
+        for (i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+        return btoa(bin);
+      }
+      function fromB64(b64) {
+        var bin = atob(b64.replace(/\s/g, '')), bytes = new Uint8Array(bin.length), i;
+        for (i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        return new TextDecoder().decode(bytes);
+      }
+
+      function getToken(forcePrompt) {
+        var t = '';
+        try { t = localStorage.getItem(TOKEN_KEY) || ''; } catch (e) {}
+        if (!t || forcePrompt) {
+          t = trimStr(window.prompt('Paste the GitHub access token for this device:') || '');
+          if (!t) throw new Error('No GitHub token set.');
+          try { localStorage.setItem(TOKEN_KEY, t); } catch (e) {}
+        }
+        return t;
+      }
+
+      function ghFetch(method, body) {
+        var url = 'https://api.github.com/repos/' + GH_OWNER + '/' + GH_REPO + '/contents/' + GH_PATH +
+                  (method === 'GET' ? '?ref=' + encodeURIComponent(GH_BRANCH) : '');
+        var opts = {
+          method: method,
+          cache: 'no-store',
+          headers: {
+            'Authorization': 'Bearer ' + getToken(false),
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28'
+          }
+        };
+        if (body) { opts.body = JSON.stringify(body); opts.headers['Content-Type'] = 'application/json'; }
+        return fetch(url, opts).then(function(res) {
+          if (res.status === 401) {
+            try { localStorage.removeItem(TOKEN_KEY); } catch (e) {}
+            throw new Error('GitHub rejected the token. Tap again to enter a new one.');
+          }
+          return res;
+        });
+      }
+
+      function ghGetFile() {
+        return ghFetch('GET').then(function(res) {
+          if (!res.ok) throw new Error('GitHub returned ' + res.status + ' when loading the roster.');
+          return res.json();
+        }).then(function(j) {
+          return { sha: j.sha, text: fromB64(j.content || '') };
+        });
+      }
+
+      // Merge the latest GitHub copy into the local data so no one's check-ins are lost.
+      function mergeRemote(text) {
+        var p = normalizeParsedCSV(parseCSV(text)), i;
+        function keyOf(hs, r) {
+          var f = hs.indexOf('First Name'), l = hs.indexOf('Last Name');
+          return (trimStr(r[f] || '') + '|' + trimStr(r[l] || '')).toLowerCase();
+        }
+        for (i = 0; i < p.headers.length; i++) {
+          if (headers.indexOf(p.headers[i]) === -1) headers.push(p.headers[i]);
+        }
+        rows.forEach(function(r) { while (r.length < headers.length) r.push(''); });
+        var map = {};
+        rows.forEach(function(r, idx) { map[keyOf(headers, r)] = idx; });
+        p.rows.forEach(function(rr) {
+          var k = keyOf(p.headers, rr);
+          if (map[k] === undefined) {
+            rows.push(headers.map(function(h) {
+              var ri = p.headers.indexOf(h); return ri === -1 ? '' : rr[ri];
+            }));
+            map[k] = rows.length - 1;
+          } else {
+            var lr = rows[map[k]];
+            p.headers.forEach(function(h, ri) {
+              var li = headers.indexOf(h), rv = rr[ri] || '';
+              if (!isFixedHeader(h) && String(rv).toUpperCase() === 'TRUE') lr[li] = 'TRUE';
+              else if ((lr[li] || '') === '' && rv !== '') lr[li] = rv;
+            });
+          }
+        });
+        refreshIndices(); updateStats(); renderRecentBar(); renderList();
+      }
+
+      function pushToGitHub(overwrite, attempt) {
+        var body = {
+          message: 'Check-in update ' + new Date().toISOString(),
+          content: toB64(buildCSV()),
+          branch: GH_BRANCH
+        };
+        if (fileSha) body.sha = fileSha;
+        return ghFetch('PUT', body).then(function(res) {
+          if (res.ok) return res.json().then(function(j) { fileSha = j.content.sha; });
+          if ((res.status === 409 || res.status === 422) && attempt < 3) {
+            // Someone else saved first (or file is new): grab the latest, merge, retry.
+            return ghGetFile().then(function(f) {
+              fileSha = f.sha;
+              if (!overwrite) mergeRemote(f.text);
+              return pushToGitHub(overwrite, attempt + 1);
+            }, function() {
+              fileSha = null; // file doesn't exist yet; create it
+              return pushToGitHub(overwrite, attempt + 1);
+            });
+          }
+          throw new Error('GitHub returned ' + res.status + ' when saving.');
+        });
+      }
+
+      // overwrite = true only when an admin uploads a brand-new master list.
+      function syncCSVToServer(overwrite) {
+        if (saving) { pendingSave = true; pendingOverwrite = pendingOverwrite || !!overwrite; return; }
+        saving = true;
+        setSyncIndicator('syncing');
+        pushToGitHub(!!overwrite, 0)
+          .then(function() { setSyncIndicator('success'); })
+          .catch(function(err) {
+            console.error(err);
+            setSyncIndicator('error');
+            alert('Warning: Check-in was recorded on this screen, but failed to save to GitHub. ' + err.message);
+          })
+          .then(function() {
+            saving = false;
+            if (pendingSave) {
+              var ow = pendingOverwrite; pendingSave = false; pendingOverwrite = false;
+              syncCSVToServer(ow);
+            }
+          });
+      }
+
+      function loadCSVFromServer() {
+        setStatus('importStatus', 'Fetching roster from GitHub...', '');
+        try { getToken(false); } catch (e) { setStatus('importStatus', e.message, 'err'); return; }
+        ghGetFile()
+          .then(function(f) {
+            if (!f.text || f.text.trim().length === 0) throw new Error('Roster file is empty.');
+            fileSha = f.sha;
+            processCSVText(f.text, 'importStatus', finalizeLoad);
+          })
+          .catch(function(err) {
+            setStatus('importStatus', 'Error loading roster: ' + err.message, 'err');
+          });
+      }
+
+      document.getElementById('loadServerBtn').onclick = loadCSVFromServer;
+      document.getElementById('tokenBtn').onclick = function() {
+        try { getToken(true); setStatus('importStatus', 'Token saved on this device.', 'ok'); }
+        catch (e) { setStatus('importStatus', e.message, 'err'); }
+      };
+      document.getElementById('forceSyncBtn').onclick = function() {
+        syncCSVToServer(false);
+        document.getElementById('adminOverlay').style.display = 'none';
+      };
+
+      /* =========================================================
+         CSV PARSER & CLEANER
+         ========================================================= */
+      function parseCSV(text) {
+        var rowsOut = [], i = 0, len = text.length, field = '', row = [], inQuotes = false;
+        while (i < len) {
+          var c = text.charAt(i);
+          if (inQuotes) {
+            if (c === '"') {
+              if (text.charAt(i + 1) === '"') { field += '"'; i += 2; continue; }
+              inQuotes = false; i++; continue;
+            }
+            field += c; i++; continue;
+          }
+          if (c === '"') { inQuotes = true; i++; continue; }
+          if (c === ',') { row.push(field); field = ''; i++; continue; }
+          if (c === '\r') { i++; continue; }
+          if (c === '\n') { row.push(field); field = ''; rowsOut.push(row); row = []; i++; continue; }
+          field += c; i++;
+        }
+        if (field.length > 0 || row.length > 0) { row.push(field); rowsOut.push(row); }
+        return rowsOut;
+      }
+
+      function normalizeParsedCSV(parsed) {
+        var headerIndex = -1, i, j;
+        for (i = 0; i < parsed.length; i++) {
+          var r = parsed[i] || [];
+          var foundFirst = false, foundLast = false;
+          for (j = 0; j < r.length; j++) {
+            var cell = trimStr(r[j] || '');
+            if (cell === 'First Name') foundFirst = true;
+            if (cell === 'Last Name') foundLast = true;
+          }
+          if (foundFirst && foundLast) { headerIndex = i; break; }
+        }
+        if (headerIndex === -1) throw new Error('Could not find CSV headers ("First Name" and "Last Name").');
+
+        var cleanedHeaders = parsed[headerIndex].slice();
+        var cleanedRows = [];
+        for (i = headerIndex + 1; i < parsed.length; i++) {
+          var sourceRow = parsed[i] || [];
+          var hasData = false;
+          for (j = 0; j < sourceRow.length; j++) {
+            if (trimStr(sourceRow[j] || '') !== '') { hasData = true; break; }
+          }
+          if (!hasData) continue;
+          var newRow = [];
+          for (j = 0; j < cleanedHeaders.length; j++) {
+            newRow.push(sourceRow[j] !== undefined ? sourceRow[j] : '');
+          }
+          cleanedRows.push(newRow);
+        }
+        return { headers: cleanedHeaders, rows: cleanedRows };
+      }
+
+      function csvEscape(val) {
+        if (val === undefined || val === null) val = '';
+        val = String(val);
+        if (val.indexOf(',') !== -1 || val.indexOf('"') !== -1 || val.indexOf('\n') !== -1 || val.indexOf('\t') !== -1 || val.indexOf('\r') !== -1) {
+          return '"' + val.replace(/"/g, '""') + '"';
+        }
+        return val;
+      }
+
+      function buildCSV() {
+        var lines = [], headerLine = [], i, j;
+        for (i = 0; i < headers.length; i++) headerLine.push(csvEscape(headers[i]));
+        lines.push(headerLine.join(','));
+        for (i = 0; i < rows.length; i++) {
+          var r = rows[i], line = [];
+          for (j = 0; j < headers.length; j++) line.push(csvEscape(r[j] !== undefined ? r[j] : ''));
+          lines.push(line.join(','));
+        }
+        return lines.join('\r\n') + '\r\n';
+      }
+
+      /* =========================================================
+         HELPERS
+         ========================================================= */
+      function trimStr(s) { return String(s).replace(/^\s+/, '').replace(/\s+$/, ''); }
+      function findColIndex(name) {
+        var target = trimStr(name);
+        for (var i = 0; i < headers.length; i++) { if (trimStr(headers[i]) === target) return i; }
+        return -1;
+      }
+      function isFixedHeader(h) {
+        var t = trimStr(h);
+        for (var i = 0; i < FIXED_COLS.length; i++) { if (FIXED_COLS[i] === t) return true; }
+        return false;
+      }
+      function pad(n) { return n < 10 ? '0' + n : '' + n; }
+      
+      function todayDateInputValue() {
+        var d = new Date();
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+      }
+      
+      function dateInputValueToHeaderFormat(v) {
+        var parts = v.split('-');
+        if (parts.length !== 3) return null;
+        var y = parseInt(parts[0], 10), m = parseInt(parts[1], 10), d = parseInt(parts[2], 10);
+        if (isNaN(y) || isNaN(m) || isNaN(d)) return null;
+        return m + '/' + d + '/' + y;
+      }
+      
+      function friendlyDate(v) {
+        var parts = v.split('-');
+        if (parts.length !== 3) return v;
+        var months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        var m = parseInt(parts[1], 10) - 1, d = parseInt(parts[2], 10);
+        return months[m] + ' ' + d + ', ' + parts[0];
+      }
+      
+      function ensureDateColumn(headerLabel) {
+        var idx = findColIndex(headerLabel);
+        if (idx !== -1) return idx;
+        headers.push(headerLabel);
+        var newIdx = headers.length - 1;
+        for (var i = 0; i < rows.length; i++) rows[i][newIdx] = 'FALSE';
+        return newIdx;
+      }
+      
+      function setStatus(elId, msg, cls) {
+        var el = document.getElementById(elId);
+        if (!el) return;
+        el.textContent = msg;
+        el.className = 'status' + (cls ? ' ' + cls : '');
+      }
+      
+      function ageLabel(rawValue) {
+        for (var i = 0; i < AGE_OPTIONS.length; i++) {
+          if (AGE_OPTIONS[i].value === rawValue) return AGE_OPTIONS[i].label.replace(/\s*0\s*/, ' ');
+        }
+        return rawValue ? rawValue.replace(/\t/g, ' ') : '';
+      }
+      
+      function refreshIndices() {
+        idxFirst = findColIndex('First Name'); idxLast = findColIndex('Last Name'); idxFull = findColIndex('Full Name');
+        idxAge = findColIndex('Age Range'); idxGroup = findColIndex('Group'); idxPhone = findColIndex('Phone Number');
+        idxEmail = findColIndex('Email'); idxTotal = findColIndex('Total #');
+      }
+
+      /* =========================================================
+         CORE LOGIC
+         ========================================================= */
+      function applyDateSelection(dateInputVal) {
+        var headerLabel = dateInputValueToHeaderFormat(dateInputVal);
+        if (!headerLabel) { currentDateColIdx = -1; return; }
+        currentDateColIdx = ensureDateColumn(headerLabel);
+        document.getElementById('dateDisplay').textContent = friendlyDate(dateInputVal);
+      }
+
+      function updateStats() {
+        var count = 0;
+        if (currentDateColIdx !== -1) {
+          for (var i = 0; i < rows.length; i++) {
+            if (String(rows[i][currentDateColIdx]).toUpperCase() === 'TRUE') count++;
+          }
+        }
+        document.getElementById('statDisplay').textContent = count + ' checked in';
+        document.getElementById('adminStats').textContent = rows.length + ' people total • ' + count + ' checked in';
+      }
+
+      /* =========================================================
+         UI RENDERING
+         ========================================================= */
+      function renderList() {
+        var wrap = document.getElementById('listWrap');
+        wrap.innerHTML = '';
+        var q = trimStr(document.getElementById('searchInput').value).toLowerCase();
+        
+        if (!q) {
+          var msg = document.createElement('div');
+          msg.className = 'emptyState';
+          msg.textContent = 'Start typing a name above to find someone.';
+          wrap.appendChild(msg);
+          return;
+        }
+        
+        var matches = [];
+        for (var i = 0; i < rows.length; i++) {
+          var full = String(rows[i][idxFirst] || '').toLowerCase() + ' ' + String(rows[i][idxLast] || '').toLowerCase();
+          if (full.indexOf(q) !== -1) {
+            matches.push(i);
+            if (matches.length >= 40) break;
+          }
+        }
+        
+        if (matches.length === 0) {
+          renderNoMatch(wrap, q);
+          return;
+        }
+        for (var m = 0; m < matches.length; m++) wrap.appendChild(buildPersonCard(matches[m]));
+      }
+
+      function buildPersonCard(rowIdx) {
+        var r = rows[rowIdx];
+        var isIn = currentDateColIdx !== -1 && String(r[currentDateColIdx]).toUpperCase() === 'TRUE';
+        
+        var card = document.createElement('div');
+        card.className = 'personCard' + (isIn ? ' checkedIn' : '');
+        
+        var info = document.createElement('div');
+        info.className = 'personInfo';
+        
+        var nameEl = document.createElement('div');
+        nameEl.className = 'personName';
+        nameEl.textContent = (r[idxFirst] || '') + ' ' + (r[idxLast] || '');
+        info.appendChild(nameEl);
+        
+        var metaParts = [];
+        var ageTxt = ageLabel(r[idxAge] || '');
+        if (ageTxt) metaParts.push(ageTxt);
+        if (idxGroup !== -1 && r[idxGroup]) metaParts.push(r[idxGroup]);
+        
+        if (metaParts.length) {
+          var metaEl = document.createElement('div');
+          metaEl.className = 'personMeta';
+          metaEl.textContent = metaParts.join(' • ');
+          info.appendChild(metaEl);
+        }
+        
+        card.appendChild(info);
+        var badge = document.createElement('div');
+        badge.className = 'checkBadge';
+        badge.textContent = isIn ? '✓ Checked in' : 'Tap to check in';
+        card.appendChild(badge);
+        
+        card.onclick = function () { showExistingPersonForm(rowIdx); };
+        return card;
+      }
+
+      function showExistingPersonForm(rowIdx) {
+        var wrap = document.getElementById('listWrap');
+        wrap.innerHTML = '';
+        var r = rows[rowIdx];
+        
+        var card = document.createElement('div');
+        card.className = 'editCard';
+        var h3 = document.createElement('h3');
+        h3.textContent = 'Check in / update information';
+        card.appendChild(h3);
+        
+        var row1 = document.createElement('div');
+        row1.className = 'fieldrow';
+        var firstInp = createInput('First Name', r[idxFirst] || '');
+        var lastInp = createInput('Last Name', r[idxLast] || '');
+        row1.appendChild(makeLabeledField('First Name', firstInp));
+        row1.appendChild(makeLabeledField('Last Name', lastInp));
+        card.appendChild(row1);
+        
+        var groupInp = createInput('Group', idxGroup !== -1 ? r[idxGroup] || '' : '');
+        card.appendChild(makeLabeledField('Group', groupInp));
+        
+        var phoneInp = createInput('Phone Number', idxPhone !== -1 ? r[idxPhone] || '' : '');
+        phoneInp.type = 'tel';
+        card.appendChild(makeLabeledField('Phone Number', phoneInp));
+        
+        var emailInp = createInput('Email', idxEmail !== -1 ? r[idxEmail] || '' : '');
+        emailInp.type = 'email';
+        card.appendChild(makeLabeledField('Email', emailInp));
+        
+        var ageSel = createAgeSelect(r[idxAge] || '');
+        card.appendChild(makeLabeledField('Age Range', ageSel));
+        
+        var buttons = document.createElement('div');
+        buttons.className = 'formButtons';
+        
+        var cancelBtn = document.createElement('button');
+        cancelBtn.className = 'btn secondary'; cancelBtn.type = 'button'; cancelBtn.textContent = 'Cancel';
+        cancelBtn.onclick = renderList;
+        
+        var checkBtn = document.createElement('button');
+        checkBtn.className = 'btn success'; checkBtn.type = 'button';
+        var alreadyIn = currentDateColIdx !== -1 && String(r[currentDateColIdx]).toUpperCase() === 'TRUE';
+        checkBtn.textContent = alreadyIn ? 'Save Changes' : 'Save & Check In';
+        
+        checkBtn.onclick = function () {
+          saveExistingPerson(rowIdx, firstInp, lastInp, groupInp, phoneInp, emailInp, ageSel);
+        };
+        
+        buttons.appendChild(cancelBtn); buttons.appendChild(checkBtn);
+        card.appendChild(buttons);
+        wrap.appendChild(card);
+      }
+
+      function createInput(label, value) {
+        var inp = document.createElement('input');
+        inp.type = 'text'; inp.className = 'formInput'; inp.value = value || ''; inp.placeholder = label;
+        return inp;
+      }
+      function makeLabeledField(label, control) {
+        var container = document.createElement('div'); container.style.width = '100%';
+        var labelEl = document.createElement('label'); labelEl.className = 'fieldLabel'; labelEl.textContent = label;
+        container.appendChild(labelEl); container.appendChild(control); return container;
+      }
+      function createAgeSelect(value) {
+        var sel = document.createElement('select'); sel.className = 'formSelect';
+        for (var i = 0; i < AGE_OPTIONS.length; i++) {
+          var opt = document.createElement('option'); opt.value = AGE_OPTIONS[i].value; opt.textContent = AGE_OPTIONS[i].label;
+          if (AGE_OPTIONS[i].value === value) opt.selected = true;
+          sel.appendChild(opt);
+        }
+        return sel;
+      }
+
+      /* =========================================================
+         SAVE & SYNC DATA
+         ========================================================= */
+      function saveExistingPerson(rowIdx, firstInp, lastInp, groupInp, phoneInp, emailInp, ageSel) {
+        var r = rows[rowIdx];
+        var first = trimStr(firstInp.value), last = trimStr(lastInp.value);
+        if (!first && !last) { alert('Please enter a first or last name.'); return; }
+        
+        if (idxFirst !== -1) r[idxFirst] = first;
+        if (idxLast !== -1) r[idxLast] = last;
+        if (idxFull !== -1) r[idxFull] = trimStr(first + ' ' + last);
+        if (idxGroup !== -1) r[idxGroup] = trimStr(groupInp.value);
+        if (idxPhone !== -1) r[idxPhone] = trimStr(phoneInp.value);
+        if (idxEmail !== -1) r[idxEmail] = trimStr(emailInp.value);
+        if (idxAge !== -1) r[idxAge] = ageSel.value;
+        
+        var wasIn = currentDateColIdx !== -1 && String(r[currentDateColIdx]).toUpperCase() === 'TRUE';
+        if (currentDateColIdx !== -1 && !wasIn) {
+          r[currentDateColIdx] = 'TRUE';
+          recentCheckins.unshift(rowIdx);
+          if (recentCheckins.length > 8) recentCheckins.pop();
+        }
+        
+        // Push the update to GitHub immediately
+        syncCSVToServer();
+        
+        renderRecentBar();
+        updateStats();
+        document.getElementById('searchInput').value = '';
+        renderList();
+      }
+
+      function renderNoMatch(wrap, q) {
+        var box = document.createElement('div'); box.className = 'emptyState';
+        var line = document.createElement('div'); line.className = 'bigname'; line.textContent = 'No one found matching "' + q + '"';
+        box.appendChild(line);
+        
+        var quick = document.createElement('div'); quick.className = 'quickAdd';
+        var h3 = document.createElement('h3'); h3.textContent = 'Add as a new person & check in';
+        quick.appendChild(h3);
+        
+        var guessFirst = '', guessLast = '';
+        var parts = trimStr(q).split(/\s+/);
+        if (parts.length >= 1) guessFirst = capitalize(parts[0]);
+        if (parts.length >= 2) guessLast = capitalize(parts.slice(1).join(' '));
+        
+        var row1 = document.createElement('div'); row1.className = 'fieldrow';
+        var firstInp = createInput('First Name', guessFirst); var lastInp = createInput('Last Name', guessLast);
+        row1.appendChild(makeLabeledField('First Name', firstInp)); row1.appendChild(makeLabeledField('Last Name', lastInp)); quick.appendChild(row1);
+        
+        var groupInp = createInput('Group', ''); quick.appendChild(makeLabeledField('Group', groupInp));
+        var phoneInp = createInput('Phone Number', ''); phoneInp.type = 'tel'; quick.appendChild(makeLabeledField('Phone Number', phoneInp));
+        var emailInp = createInput('Email', ''); emailInp.type = 'email'; quick.appendChild(makeLabeledField('Email', emailInp));
+        var ageSel = createAgeSelect(''); quick.appendChild(makeLabeledField('Age Range', ageSel));
+        
+        var buttons = document.createElement('div'); buttons.className = 'formButtons';
+        var cancelBtn = document.createElement('button'); cancelBtn.className = 'btn secondary'; cancelBtn.type = 'button'; cancelBtn.textContent = 'Cancel';
+        cancelBtn.onclick = function () { document.getElementById('searchInput').value = ''; renderList(); };
+        
+        var addBtn = document.createElement('button'); addBtn.className = 'btn success'; addBtn.type = 'button'; addBtn.textContent = 'Add & Check In';
+        addBtn.onclick = function () { addPersonAndCheckIn(trimStr(firstInp.value), trimStr(lastInp.value), groupInp.value, phoneInp.value, emailInp.value, ageSel.value); };
+        
+        buttons.appendChild(cancelBtn); buttons.appendChild(addBtn); quick.appendChild(buttons); box.appendChild(quick); wrap.appendChild(box);
+      }
+      
+      function capitalize(s) { return !s ? s : s.charAt(0).toUpperCase() + s.slice(1); }
+
+      function addPersonAndCheckIn(first, last, group, phone, email, age) {
+        if (!first && !last) { alert('Please enter a first or last name.'); return; }
+        
+        var newRow = [];
+        for (var i = 0; i < headers.length; i++) newRow.push('');
+        
+        if (idxFirst !== -1) newRow[idxFirst] = first;
+        if (idxLast !== -1) newRow[idxLast] = last;
+        if (idxFull !== -1) newRow[idxFull] = trimStr(first + ' ' + last);
+        if (idxGroup !== -1) newRow[idxGroup] = group;
+        if (idxPhone !== -1) newRow[idxPhone] = phone;
+        if (idxEmail !== -1) newRow[idxEmail] = email;
+        if (idxAge !== -1) newRow[idxAge] = age;
+        if (idxTotal !== -1) newRow[idxTotal] = '1';
+        
+        for (var j = 0; j < headers.length; j++) {
+          if (!isFixedHeader(headers[j]) && newRow[j] === '') newRow[j] = 'FALSE';
+        }
+        
+        rows.push(newRow);
+        var newIdx = rows.length - 1;
+        
+        if (currentDateColIdx !== -1) rows[newIdx][currentDateColIdx] = 'TRUE';
+        
+        recentCheckins.unshift(newIdx);
+        if (recentCheckins.length > 8) recentCheckins.pop();
+        
+        // Push the update to GitHub immediately
+        syncCSVToServer();
+        
+        renderRecentBar();
+        document.getElementById('searchInput').value = '';
+        renderList();
+        updateStats();
+      }
+
+      function renderRecentBar() {
+        var bar = document.getElementById('recentBar'), chips = document.getElementById('recentChips');
+        if (recentCheckins.length === 0) { bar.style.display = 'none'; return; }
+        bar.style.display = ''; chips.innerHTML = '';
+        for (var i = 0; i < recentCheckins.length; i++) {
+          var r = rows[recentCheckins[i]];
+          if (!r) continue;
+          var chip = document.createElement('span'); chip.className = 'recentChip';
+          chip.textContent = (r[idxFirst] || '') + ' ' + (r[idxLast] || '');
+          chips.appendChild(chip);
+        }
+      }
+
+      /* =========================================================
+         INITIALIZATION & FILE PARSING
+         ========================================================= */
+      function processCSVText(text, statusElId, onDone) {
+        try {
+          var parsed = parseCSV(text);
+          if (!parsed || parsed.length < 1) throw new Error('File appears to be empty.');
+          var normalized = normalizeParsedCSV(parsed);
+          headers = normalized.headers; rows = normalized.rows;
+          refreshIndices();
+          if (idxFirst === -1 || idxLast === -1) throw new Error('Could not find First Name / Last Name columns.');
+          recentCheckins = []; renderRecentBar();
+          setStatus(statusElId, 'Loaded ' + rows.length + ' people.', 'ok');
+          if (onDone) onDone();
+        } catch (err) {
+          setStatus(statusElId, 'Error: ' + err.message, 'err');
+        }
+      }
+
+      function finalizeLoad() {
+        var todayVal = todayDateInputValue();
+        document.getElementById('dateOverride').value = todayVal;
+        applyDateSelection(todayVal);
+        updateStats();
+        document.getElementById('setupScreen').style.display = 'none';
+        document.getElementById('mainScreen').style.display = 'flex';
+        renderList();
+        try { document.getElementById('searchInput').focus(); } catch (e) {}
+      }
+
+      document.getElementById('fileInput').onchange = function (evt) {
+        var file = evt.target.files && evt.target.files[0];
+        if (!file) return;
+        setStatus('importStatus', 'Reading CSV...', '');
+        var reader = new FileReader();
+        reader.onload = function (e) {
+          processCSVText(e.target.result, 'importStatus', function() {
+            // Because You are uploading a new master CSV from the Admin screen, push it to the server instantly.
+            syncCSVToServer(true);
+            finalizeLoad();
+          });
+        };
+        reader.onerror = function () { setStatus('importStatus', 'Could not read the file.', 'err'); };
+        reader.readAsText(file, 'UTF-8');
+      };
+
+      /* =========================================================
+         ADMIN UI ACTIONS
+         ========================================================= */
+      document.getElementById('gearBtn').onclick = function () {
+        document.getElementById('adminOverlay').style.display = 'block'; updateStats();
+      };
+      document.getElementById('closeAdminBtn').onclick = function () {
+        document.getElementById('adminOverlay').style.display = 'none';
+      };
+      document.getElementById('adminOverlay').onclick = function (e) {
+        if (e.target.id === 'adminOverlay') document.getElementById('adminOverlay').style.display = 'none';
+      };
+      document.getElementById('dateOverride').onchange = function () {
+        applyDateSelection(this.value); updateStats(); renderList();
+      };
+      document.getElementById('searchInput').oninput = function () { renderList(); };
+
+      /* =========================================================
+         EXPORT (DOWNLOAD TO LOCAL DEVICE)
+         ========================================================= */
+      document.getElementById('exportBtn').onclick = function () {
+        try {
+          var csvText = buildCSV();
+          var dv = document.getElementById('dateOverride').value || todayDateInputValue();
+          var filename = 'attendance_export_' + dv + '.csv';
+          downloadCSV(csvText, filename);
+          setStatus('exportStatus', 'Downloaded ' + filename + '. Re-import it into Google Sheets.', 'ok');
+        } catch (err) {
+          setStatus('exportStatus', 'Export failed: ' + err.message, 'err');
+        }
+      };
+
+      function downloadCSV(text, filename) {
+        var uri = 'data:text/csv;charset=utf-8,' + encodeURIComponent(text);
+        var link = document.createElement('a');
+        if (typeof link.download !== 'undefined') {
+          link.href = uri; link.download = filename;
+          document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        } else {
+          window.open(uri);
+        }
+      }
+
+    })();
+  </script>
+</body>
+</html>
